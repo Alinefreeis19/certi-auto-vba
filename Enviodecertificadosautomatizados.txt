@@ -1,0 +1,108 @@
+Sub PreencherDocumentoWordEEnviarEmail()
+    Dim WordApp As Object
+    Dim WordDoc As Object
+    Dim OutlookApp As Object
+    Dim OutlookMail As Object
+    Dim Planilha As Worksheet
+    Dim Celula As Range
+    Dim DocumentoPath As String
+    Dim NomeAtendente As String
+    Dim SupervisorEmail As String
+    Dim NovoDoc As Object
+    Dim NovoDocumentoPath As String
+    Dim SupervisorAnterior As String
+
+    ' Inicializa a planilha e o intervalo de dados
+    Set Planilha = ThisWorkbook.Sheets("Emailsupervisao")
+
+    ' Caminho para o arquivo modelo do documento
+    DocumentoPath = "C:\Users\131383\OneDrive - Localiza\Documentos\Certificados\Certificados.docx"
+
+    ' Inicializa o Word
+    On Error Resume Next
+    Set WordApp = GetObject(, "Word.Application")
+    If Err.Number <> 0 Then
+        Set WordApp = CreateObject("Word.Application")
+    End If
+    Err.Clear
+    On Error GoTo 0
+    If WordApp Is Nothing Then
+        MsgBox "O Word não está instalado ou não pôde ser inicializado.", vbExclamation
+        Exit Sub
+    End If
+    WordApp.Visible = True ' Torna o aplicativo do Word visível
+
+    ' Inicializa o Outlook
+    On Error Resume Next
+    Set OutlookApp = CreateObject("Outlook.Application")
+    If Err.Number <> 0 Then
+        MsgBox "O Outlook não está instalado ou não pôde ser inicializado.", vbExclamation
+        Exit Sub
+    End If
+    Err.Clear
+    On Error GoTo 0
+
+    ' Itera pelas células na coluna A
+    For Each Celula In Planilha.Range("A2:A" & Planilha.Cells(Rows.Count, 1).End(xlUp).Row)
+        
+        NomeAtendente = Celula.Value
+        SupervisorEmail = Celula.Offset(0, 1).Value ' Obtém o e-mail do supervisor da coluna B
+        ' Clona o documento modelo para criar um novo documento
+        Set WordDoc = WordApp.Documents.Open(DocumentoPath)
+        WordDoc.Content.Copy
+
+        ' Cria um novo documento e cola o conteúdo
+        Set NovoDoc = WordApp.Documents.Add
+        NovoDoc.Content.Paste
+
+        ' Encontra e substitui o marcador de posição pelo nome do atendente
+        NovoDoc.Content.Find.Execute FindText:="[nome]", ReplaceWith:=NomeAtendente, Replace:=2
+
+        ' Salva o novo documento com o nome do atendente
+        NovoDocumentoPath = "C:\Users\131383\" & NomeAtendente & ".pdf"
+        NovoDoc.SaveAs2 Filename:=NovoDocumentoPath, FileFormat:=17
+
+        ' Verifica se o e-mail deve ser enviado para um novo supervisor
+        If SupervisorEmail <> SupervisorAnterior Then
+            ' Envia o e-mail para o supervisor anterior, se existir
+            If Not OutlookMail Is Nothing Then
+                OutlookMail.Send ' Envia o e-mail anterior
+            End If
+            ' Cria um novo e-mail para o supervisor atual
+            Set OutlookMail = OutlookApp.CreateItem(0)
+            With OutlookMail
+                .To = SupervisorEmail
+                .SentOnBehalfOfName = "área@gmail.com" ' Define o endereço de envio
+                .Subject = "Atenção! Certificados"
+                .Body = "Prezado(a) Gestor(a)" & vbCrLf & vbCrLf & "É com alegria que apresentamos os certificados de reconhecimento do time de atendimento vencedores. Os documentos estão anexados a este e-mail." & vbCrLf & vbCrLf & "Atenciosamente," & vbCrLf & "Aline Reis"
+            End With
+        End If
+
+        ' Anexa o certificado ao e-mail do supervisor atual
+        OutlookMail.Attachments.Add NovoDocumentoPath
+
+        ' Define o supervisor anterior para comparação
+        SupervisorAnterior = SupervisorEmail
+
+        ' Fecha o novo documento
+        NovoDoc.Close False
+
+        ' Fecha o documento modelo
+        WordDoc.Close False
+    Next Celula
+
+    ' Envia o último e-mail, se existir
+    If Not OutlookMail Is Nothing Then
+        OutlookMail.Send
+    End If
+
+    ' Finaliza o Word
+    WordApp.Quit
+
+    ' Finaliza o Outlook
+    Set OutlookApp = Nothing
+    Set OutlookMail = Nothing
+
+    MsgBox "Processo concluído com sucesso!"
+End Sub
+
